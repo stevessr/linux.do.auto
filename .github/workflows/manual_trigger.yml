@@ -1,0 +1,24 @@
+name: Manual Trigger
+
+on:
+  workflow_dispatch:
+    inputs:
+      cookie_json_content:
+        description: 'cookie.json content'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create cookie.json
+      run: echo "${{ github.inputs.cookie_json_content }}" > cookie.json
+
+    - name: Verify cookie.json
+      run: |
+        cat cookie.json

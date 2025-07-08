@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import argparse
+import re
 from camoufox.async_api import AsyncCamoufox
 from playwright.async_api import async_playwright
 
@@ -56,7 +57,6 @@ async def read_topic(page, topic_url):
         await page.wait_for_selector('div.topic-body', timeout=60000)
         
         # Extract topic_id from the URL
-        import re
         match = re.search(r'/t/topic/(\d+)', topic_url)
         if match:
             topic_id = match.group(1)
@@ -64,6 +64,45 @@ async def read_topic(page, topic_url):
         else:
             print(f"Could not extract topic ID from URL: {topic_url}")
             return
+
+        print("Simulating scrolling to load all posts...")
+        last_height = await page.evaluate("document.body.scrollHeight")
+        scroll_attempts = 0
+        max_scroll_attempts = 200 # Limit to prevent infinite loops
+        stable_checks = 0
+        max_stable_checks = 5 # Number of times height must be stable at bottom
+
+        while scroll_attempts < max_scroll_attempts:
+            scroll_attempts += 1
+            # Scroll to the bottom of the page using JavaScript
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+            # Also press PageDown for good measure, in case JS scroll is not enough
+            await page.keyboard.press('PageDown')
+            
+            # Wait for content to load after scrolling
+            await asyncio.sleep(2) # Increased sleep duration
+
+            new_height = await page.evaluate("document.body.scrollHeight")
+            current_scroll_position = await page.evaluate("window.innerHeight + window.scrollY")
+            
+            print(f"Scroll attempt {scroll_attempts}: New height: {new_height}, Last height: {last_height}, Current scroll position: {current_scroll_position}")
+
+            # Check if we are at the very bottom of the page (with a small buffer)
+            is_at_bottom = current_scroll_position >= new_height - 100 # 100px buffer
+
+            if new_height == last_height and is_at_bottom:
+                stable_checks += 1
+                print(f"Height stable and at bottom. Stable checks: {stable_checks}/{max_stable_checks}")
+                if stable_checks >= max_stable_checks:
+                    print("Reached end of scrollable content after multiple stable checks.")
+                    break # Exit loop if height is stable and at bottom for multiple checks
+            elif new_height > last_height:
+                last_height = new_height
+                stable_checks = 0 # Reset stable checks if new content loaded
+            else:
+                # If height decreased or other unexpected behavior, reset stable checks
+                stable_checks = 0
+                last_height = new_height # Update last_height even if it decreased (shouldn't happen normally)
 
         print("All posts loaded.")
 
@@ -143,7 +182,7 @@ async def main():
             async with AsyncCamoufox(headless=not args.headful) as browser:
                 page = await browser.new_page()
                 await load_cookies(page, args.cookie_file)
-                await page.goto(f"{BASE_URL}/unseen", timeout=60000) # Visit again to apply cookies
+                await page.goto(f"{BASE_URL}/unread", timeout=60000) # Visit again to apply cookies
             
                 try:
                     await page.wait_for_selector('header .current-user', timeout=20000)
@@ -155,7 +194,7 @@ async def main():
                 read_topics = load_read_topics()
                 print(f"Loaded {len(read_topics)} previously read topics: {read_topics}")
 
-                await page.goto(f"{BASE_URL}/unseen") # Ensure we are on the unseen topics page to get topic list
+                await page.goto(f"{BASE_URL}/unread") # Ensure we are on the unread topics page to get topic list
                 await page.wait_for_selector('tbody .topic-list-item', timeout=30000)
                 
                 topic_elements = await page.query_selector_all('tbody .topic-list-item a.title.raw-link.raw-topic-link')
@@ -163,7 +202,6 @@ async def main():
                 print(f"Found {len(topic_urls)} topic URLs on the page: {topic_urls}")
                 
                 new_topics = [url for url in topic_urls if url not in read_topics]
-                print(f"Filtered {len(new_topics)} new topics: {new_topics}")
                 print(f"Filtered {len(new_topics)} new topics: {new_topics}")
 
                 if not new_topics:

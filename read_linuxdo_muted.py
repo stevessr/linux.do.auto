@@ -143,7 +143,7 @@ async def main():
             async with AsyncCamoufox(headless=not args.headful) as browser:
                 page = await browser.new_page()
                 await load_cookies(page, args.cookie_file)
-                await page.goto(f"{BASE_URL}/unseen", timeout=60000) # Visit again to apply cookies
+                await page.goto(f"{BASE_URL}/c/muted/45/l/unseen", timeout=60000) # Visit again to apply cookies
             
                 try:
                     await page.wait_for_selector('header .current-user', timeout=20000)
@@ -155,7 +155,7 @@ async def main():
                 read_topics = load_read_topics()
                 print(f"Loaded {len(read_topics)} previously read topics: {read_topics}")
 
-                await page.goto(f"{BASE_URL}/unseen") # Ensure we are on the unseen topics page to get topic list
+                await page.goto(f"{BASE_URL}/c/muted/45/l/unseen") # Ensure we are on the unseen topics page to get topic list
                 await page.wait_for_selector('tbody .topic-list-item', timeout=30000)
                 
                 topic_elements = await page.query_selector_all('tbody .topic-list-item a.title.raw-link.raw-topic-link')
